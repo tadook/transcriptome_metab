@@ -17,13 +17,13 @@ library(ROCR)
 library(randomForest)
 
 # Import
-txi_398 <- readRDS("rawdata/txi_salmon_n398.rds")
-transcript_398_df_mod <- read_csv("rawdata/metadata_DESeq_n398.csv")
-metadata <- read_dta("rawdata/m35_metadata_n1016_2018march.dta")
+txi_398 <- readRDS("../rawdata/txi_salmon_n398.rds")
+transcript_398_df_mod <- read_csv("../rawdata/metadata_DESeq_n398.csv")
+metadata <- read_dta("../rawdata/m35_metadata_n1016_2018march.dta")
 
 # Merge files
 ddsTxi_virus_398 <- DESeqDataSetFromTximport(txi_398,
-                                             colData = transcript_398_df_mod, # added "_mod" -> is it ok?
+                                             colData = transcript_398_df_mod,
                                              design = ~ 1)
 
 keep_virus_398 <- rowSums(counts(ddsTxi_virus_398)) >= 10 # remove mRNA counts < 10
@@ -32,29 +32,31 @@ ddsTxi_virus_398_2 # 21136 -> 20486 (20596?)
 ddsTxi_virus_398_3 <- DESeq(ddsTxi_virus_398_2)
 
 normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>% 
-  scale() %>% 
+#  scale() %>%  # scaling will be applied in the python file
   as.data.frame() %>%
   rownames_to_column(var = "study_id") %>%
   merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment")], by ="study_id") %>%
   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0)))
 
-table <- vst(ddsTxi_virus_398_3)
+fwrite(normalized_counts,"../normalized_counts.csv")
 
-trans_data <- t(table@assays@data@listData[[1]]) %>%  # http://adv-r.had.co.nz/S4.html
-  as.data.frame() %>%
-  rownames_to_column(var = "study_id") %>%
-  merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment")], by ="study_id") %>%
-  mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0)))
+# table <- vst(ddsTxi_virus_398_3)
+# 
+# trans_data <- t(table@assays@data@listData[[1]]) %>%  # http://adv-r.had.co.nz/S4.html
+#   as.data.frame() %>%
+#   rownames_to_column(var = "study_id") %>%
+#   merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment")], by ="study_id") %>%
+#   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0)))
+#
+# fwrite(trans_data,"trans_data.csv")
 
-fwrite(trans_data,"trans_data.csv")
-fwrite(normalized_counts,"normalized_counts.csv")
-
-normalized_counts <- fread("normalized_counts.csv")
-trans_data <- normalized_counts 
 
 # Lasso regression -- simple prediction
 # https://bookdown.org/tpinto_home/Regularisation/lasso-regression.html
 ## Create train data and test data
+
+# normalized_counts <- fread("../normalized_counts.csv")
+trans_data <- normalized_counts 
 trans_data_pre <- trans_data %>% dplyr::select(-c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment"))
 set.seed(1)
 df_split <- initial_split(trans_data_pre, prop = 0.8) 
