@@ -4,7 +4,7 @@
 
 # Python
 import sys
-sys.path.append("pyDeepInsight/")
+sys.path.append("../pyDeepInsight/")
 import pyDeepInsight.image_transformer
 
 # create sample data
@@ -15,7 +15,7 @@ from pandas import DataFrame
 
 # import host transcriptome dataset
 import pandas as pd
-trans_data = pd.read_csv('./normalized_counts.csv')
+trans_data = pd.read_csv('../normalized_counts.csv')
 X = trans_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment'])
 y = trans_data['severity']
 print(X.shape, y.shape)
@@ -38,6 +38,7 @@ print(X.shape, y.shape)
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
+from pyDeepInsight import Norm2Scaler
 
 random_state=1515
 X_train, X_test, y_train, y_test = train_test_split(
@@ -51,8 +52,9 @@ X_train, X_test, y_train, y_test = train_test_split(
 # X_train_norm = rs.fit_transform(X_train)
 # X_test_norm = rs.transform(X_test)
 
-X_train_norm = X_train
-X_test_norm = X_test
+ln = Norm2Scaler()
+X_train_norm = ln.fit_transform(X_train)
+X_test_norm = ln.transform(X_test)
 
 import numpy as np
 
