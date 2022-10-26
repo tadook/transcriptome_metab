@@ -1,6 +1,9 @@
 # Command Prompt
 !git clone https://github.com/alok-ai-lab/pyDeepInsight.git
 !pip install -r pyDeepInsight/requirements.txt
+!pip install seaborn
+!pip install umap-learn
+!pip install plotly_express==0.4.0
 
 # Python
 import sys
@@ -15,8 +18,8 @@ from pandas import DataFrame
 
 # import host transcriptome dataset
 import pandas as pd
-trans_data = pd.read_csv('../normalized_counts.csv')
-X = trans_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment'])
+trans_data = pd.read_csv('../normalized_counts.csv') #normalized_counts
+X = trans_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
 y = trans_data['severity']
 print(X.shape, y.shape)
 
@@ -44,6 +47,12 @@ random_state=1515
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=23, stratify=y)
 
+# SMOTE
+from imblearn.over_sampling import SMOTE
+sm = SMOTE()
+X_train, y_train = sm.fit_resample(X_train, y_train)
+print(X_train, y_train)
+
 # mms = MinMaxScaler()
 # X_train_norm = mms.fit_transform(X_train)
 # X_test_norm = mms.transform(X_test)
@@ -55,6 +64,12 @@ X_train, X_test, y_train, y_test = train_test_split(
 ln = Norm2Scaler()
 X_train_norm = ln.fit_transform(X_train)
 X_test_norm = ln.transform(X_test)
+
+# X_train_norm = X_train
+# X_test_norm = X_test
+
+X_train_norm = X_train_norm.fillna(0)
+X_test_norm = X_test_norm.fillna(0)
 
 import numpy as np
 
@@ -74,6 +89,8 @@ num_classes = np.unique(y_train_enc).size
 #      n_jobs=-1
 #  )
 
+# Tsne
+
 from sklearn.manifold import TSNE
 distance_metric = 'cosine'
 
@@ -82,17 +99,51 @@ reducer = TSNE(
     metric=distance_metric,
     init='random',
     learning_rate='auto',
-    n_jobs=-1
+    n_jobs=-1,
+    verbose=True
 )
+
+projections = reducer.fit_transform(X)
+
+import plotly.express as px
+
+fig = px.scatter(
+    projections, x=0, y=1,
+    color=y, labels={'color': "label"}
+)
+fig.show()
+
+# UMAP
+
+# import umap.umap_ as umap
+
+# reducer = umap.UMAP(
+#     n_components=2,
+#     min_dist=0.1,
+#     metric='euclidean',
+#     n_jobs=-1
+# )
+
+# projections = reducer.fit_transform(X)
+
+# import plotly.express as px
+
+# fig = px.scatter(
+#     projections, x=0, y=1,
+#     color=y, labels={'color': "label"}
+# )
+
+# fig.show()
+
 
 from pyDeepInsight import ImageTransformer
 
-pixel_size = (224,224)
+pixel_size = (112,112)
 it = ImageTransformer(
     feature_extractor=reducer,
     pixels=pixel_size)
     
-it.fit(X_train_norm, y=y_train, plot=True) # it takes 3 minites in case of "n:400, feature:20000"
+it.fit(X_train, y=y_train, plot=True) # it takes 3 minites in case of "n:400, feature:20000"
 X_train_img = it.transform(X_train_norm)
 X_test_img = it.transform(X_test_norm)
 
@@ -110,8 +161,27 @@ import matplotlib.pyplot as plt
 
 # plt.show()
 
-# plot for each label
+# View overall feature overlap
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import seaborn as sns
 
+fdm = it.feature_density_matrix()
+fdm[fdm == 0] = np.nan
+
+plt.figure(figsize=(10, 7.5))
+
+ax = sns.heatmap(fdm, cmap="viridis", linewidths=0., 
+                 linecolor="lightgrey", square=True)
+ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+ax.yaxis.set_major_locator(ticker.MultipleLocator(5))
+for _, spine in ax.spines.items():
+    spine.set_visible(True)
+_ = plt.title("Genes per pixel")
+
+plt.show()
+
+# plot for each label
 fix, axs = plt.subplots(ncols=5, nrows=num_classes, figsize=(40, 15))
 for c in range(num_classes):
   indexes = np.where(y_train == c)[0]
@@ -185,7 +255,7 @@ y_train_tensor = torch.from_numpy(le.fit_transform(y_train)).to(device)
 X_test_tensor = torch.stack([preprocess(img) for img in X_test_img]).float().to(device)
 y_test_tensor = torch.from_numpy(le.transform(y_test)).to(device)
 
-batch_size = 64
+batch_size = 200
 
 trainset = TensorDataset(X_train_tensor, y_train_tensor)
 trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
@@ -195,14 +265,14 @@ testloader = DataLoader(testset, batch_size=batch_size, shuffle=False)
 
 criterion = nn.CrossEntropyLoss()
 
-# optimizer = optim.SGD(
-#     net.parameters(),
-#     lr=1e-04,
-#     momentum=0.8,
-#     weight_decay=1e-05
-# )
+optimizer = optim.SGD(
+    net.parameters(),
+    lr=1e-05,
+    momentum=0.8,
+    weight_decay=1e-05
+)
 
-optimizer = optim.Adam(net.parameters(), 1e-5)
+# optimizer = optim.Adam(net.parameters(), 1e-5)
 
 def evaluate(net, dataloader):
   predicted_scores = np.empty(0)
@@ -225,9 +295,9 @@ def evaluate(net, dataloader):
 # training loop
 from sklearn.metrics import roc_auc_score
 
-num_epochs = 700
+num_epochs = 100
 for epoch in range(num_epochs):
-    net.train()
+    # net.train()
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
