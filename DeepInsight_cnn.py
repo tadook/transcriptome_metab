@@ -21,6 +21,7 @@ import pandas as pd
 trans_data = pd.read_csv('../normalized_counts.csv') #normalized_counts
 X = trans_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
 y = trans_data['severity']
+genes = trans_data.iloc[:, 1:858].columns.to_numpy()
 print(X.shape, y.shape)
 
 # generate a binary classification dataset (toy data)
@@ -89,7 +90,7 @@ num_classes = np.unique(y_train_enc).size
 #      n_jobs=-1
 #  )
 
-# Tsne
+# tSNE
 
 from sklearn.manifold import TSNE
 distance_metric = 'cosine'
@@ -295,10 +296,11 @@ def evaluate(net, dataloader):
 # training loop
 from sklearn.metrics import roc_auc_score
 
-num_epochs = 100
-for epoch in range(num_epochs):
-    # net.train()
+num_epochs = 50
 
+net.train()
+for epoch in range(num_epochs):
+    
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
@@ -361,41 +363,86 @@ print(f"The train accuracy was {roc_auc_score(train_true, train_predicted):.3f}"
 print(f"The test accuracy was {roc_auc_score(test_true, test_predicted):.3f}")
 
 
+# Deep Feature: CAM-based feature selection
+from pyDeepInsight import CAMFeatureSelector
 
-# Grad-CAM
+## Step 1 - CAMFeatureSelector object
+cm_method='GradCAM'
+camfs = CAMFeatureSelector(
+    model=net,
+    it=it,
+    cam_method=cm_method
+)
 
-!pip install grad-cam
+## Step 2 - Compute Class-Specific CAMs
+fl_method = "mean"
+class_cam = camfs.calculate_class_activations(X_train_tensor, y_train_tensor, batch_size=100, flatten_method=fl_method)
 
-from pytorch_grad_cam import GradCAM, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, FullGrad
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+## Step 3 - Select Class-Specific Features
+
+## Added modification to .select_class_features (Line191: pyDeepInsight/pyDeepInsight/feature_selection.py)
+# def select_class_features(self, cams: Dict[int, np.ndarray],
+#                             threshold: float = 0.6) -> Dict[int, np.ndarray]:
+#     class_idx = {}
+#     for cat, cam in cams.items():
+#         cam_pass = np.stack(np.where(cam >= threshold)).T
+#         it_pass = np.where(
+#             (self.feature_coords == cam_pass[:, None]).all(-1) #### Modified ####
+#         )[1]
+#         class_idx[cat] = it_pass
+#     return class_idx
+                 
+fs_threshold = 0.6
+feat_idx = camfs.select_class_features(cams=class_cam, threshold=fs_threshold)
+feat_idx
+
 from pytorch_grad_cam.utils.image import show_cam_on_image
-from torchvision.models import resnet50
+from matplotlib import pyplot as plt
 
-model = resnet50(pretrained=True)
-target_layers = [model.layer4[-1]]
-input_tensor = # Create an input tensor image for your model..
-# Note: input_tensor can be a batch tensor with several images!
+def cam_image(X, y, cam, fs, threshold):
+    fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(2, 1),
+                            constrained_layout=True, squeeze=False) # added "squeeze=False" for binomial outcome
+    for cat in np.unique(y):
+        row = cat // 2 # cat // 4
+        col = cat # cat % 4
+        cat_idx = np.where(y == cat)[0]
+        X_cat = X[cat_idx,:,:,:].detach().mean(dim=0).cpu().numpy()
+        cam_cat = cam[cat].copy()
+        cam_cat[cam_cat <= threshold] = 0
+        visualization = show_cam_on_image(
+            np.transpose(X_cat, (1,2,0)),
+            cam_cat,
+            use_rgb=True
+        )
+        _ = axs[row, col].imshow(visualization)
+        axs[row, col].text(0,0,le_mapping[cat],c="white",ha="left",va="top",weight="bold",size="x-large")
+        axs[row, col].text(112,112,f"{fs[cat].shape[0]} genes",c="white",ha="right",va="bottom",weight="bold",size="large")
+        axs[row, col].axis('off')
+    return fig, axs
 
-# Construct the CAM object once, and then re-use it on many images:
-cam = GradCAM(model=model, target_layers=target_layers, use_cuda=args.use_cuda)
+_ = cam_image(X_train_tensor, y_train_tensor.detach().cpu().numpy(), class_cam, feat_idx, fs_threshold)
 
-# You can also use it within a with statement, to make sure it is freed,
-# In case you need to re-create it inside an outer loop:
-# with GradCAM(model=model, target_layers=target_layers, use_cuda=args.use_cuda) as cam:
-#   ...
+plt.show()
 
-# We have to specify the target we want to generate
-# the Class Activation Maps for.
-# If targets is None, the highest scoring category
-# will be used for every image in the batch.
-# Here we use ClassifierOutputTarget, but you can define your own custom targets
-# That are, for example, combinations of categories, or specific outputs in a non standard model.
+## Step 4 - Extract Feature Names
 
-targets = [ClassifierOutputTarget(281)]
+### Category
+for cat, idx in feat_idx.items():
+    feature_names = genes[idx]
+    print(f"{idx.shape[0]:5} features selected for {le_mapping[cat]:4}: {', '.join(feature_names[1:10])}...")
 
-# You can also pass aug_smooth=True and eigen_smooth=True, to apply smoothing.
-grayscale_cam = cam(input_tensor=input_tensor, targets=targets)
+    feat = pd.DataFrame()
 
-# In this example grayscale_cam has only one image in the batch:
-grayscale_cam = grayscale_cam[0, :]
-visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+### Table
+feat = pd.DataFrame()
+for cat, idx in feat_idx.items():
+    feature_names = genes[idx]
+    feat = pd.concat([feat, pd.DataFrame({'severity':le_mapping[cat], 'gene':feature_names})])
+fdf = feat.assign(selected=1).pivot(index='severity', columns='gene', values="selected").fillna(0).astype(int)
+
+pd.DataFrame(
+    np.matmul(fdf.values,fdf.T.values),
+    index=fdf.index.values,
+    columns=fdf.index.values
+)
+
