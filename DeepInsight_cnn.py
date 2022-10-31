@@ -296,7 +296,7 @@ def evaluate(net, dataloader):
 # training loop
 from sklearn.metrics import roc_auc_score
 
-num_epochs = 50
+num_epochs = 3000
 
 net.train()
 for epoch in range(num_epochs):
@@ -318,7 +318,7 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
 
     # print epoch statistics
-    if not (epoch % 10):
+    if not (epoch % 100):
         print(f'[Epoch {epoch}] loss: {running_loss / len(X_train_tensor) * batch_size:.3f}')
 
         _, _, train_metrics = evaluate(net, trainloader)
@@ -392,7 +392,7 @@ class_cam = camfs.calculate_class_activations(X_train_tensor, y_train_tensor, ba
 #         class_idx[cat] = it_pass
 #     return class_idx
                  
-fs_threshold = 0.6
+fs_threshold = 0.75
 feat_idx = camfs.select_class_features(cams=class_cam, threshold=fs_threshold)
 feat_idx
 
