@@ -3,6 +3,7 @@
 !pip install -r pyDeepInsight/requirements.txt
 !pip install seaborn
 !pip install umap-learn
+!pip install imblearn
 !pip install plotly_express==0.4.0
 
 # Python
@@ -18,10 +19,10 @@ from pandas import DataFrame
 
 # import host transcriptome dataset
 import pandas as pd
-trans_data = pd.read_csv('../normalized_counts.csv') #normalized_counts
-X = trans_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
-y = trans_data['severity']
-genes = trans_data.iloc[:, 1:858].columns.to_numpy()
+tra_met_data = pd.read_csv('../normalized_counts.csv') #normalized_counts
+X = tra_met_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
+y = tra_met_data['severity']
+genes = tra_met_data.iloc[:, 1:977].columns.to_numpy()
 print(X.shape, y.shape)
 
 # generate a binary classification dataset (toy data)
@@ -136,7 +137,6 @@ fig.show()
 
 # fig.show()
 
-
 from pyDeepInsight import ImageTransformer
 
 pixel_size = (112,112)
@@ -204,7 +204,7 @@ plt.show()
 import os
 from PIL import Image
 
-output_img_dir = "outputs/input_imgs"
+output_img_dir = "outputs/input_imgs_tramet"
 
 for split, X, y in zip(['train', 'test'], [X_train_img, X_test_img], [y_train, y_test]):
   for c in range(num_classes):
@@ -296,11 +296,11 @@ def evaluate(net, dataloader):
 # training loop
 from sklearn.metrics import roc_auc_score
 
-num_epochs = 1800
+num_epochs = 2000
 
 net.train()
 for epoch in range(num_epochs):
-    
+
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]

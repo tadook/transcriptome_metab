@@ -35,7 +35,7 @@ normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>%
 #  scale() %>%  # scaling will be applied in the python file
   as.data.frame() %>%
   rownames_to_column(var = "study_id") %>%
-  merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment","intake_sex","Age_mo")], by ="study_id") %>%
+  merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment","intake_sex","Age_mo","raceethn")], by ="study_id") %>%
   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
   mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
 
@@ -43,7 +43,7 @@ variable <- NULL
 for (i in 2:20597){ 
   severe.fit <- glm(severity ~ ., 
                     family = binomial(),
-                    normalized_counts[,c(i,20601:20603)]) # covariates:intake_sex, Age_mo
+                    normalized_counts[,c(i,20601:20604)]) # covariates:intake_sex, Age_mo, raceethn
   sum <- summary(severe.fit)
   sum_tran <- sum$coefficients[2,] %>% as.data.frame() %>% t()
   rownames(sum_tran) <- colnames(normalized_counts)[i]
@@ -53,7 +53,7 @@ for (i in 2:20597){
 var_select <- filter(as.data.frame(variable), variable[,4]<0.05)
 
 normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>% 
-  scale() %>%  # scaling will be applied in the python file
+#  scale() %>%  # scaling will be applied in the python file
   as.data.frame() %>%
   dplyr::select(rownames(var_select)) %>% 
   rownames_to_column(var = "study_id") %>%
