@@ -296,7 +296,7 @@ def evaluate(net, dataloader):
 # training loop
 from sklearn.metrics import roc_auc_score
 
-num_epochs = 3000
+num_epochs = 1800
 
 net.train()
 for epoch in range(num_epochs):
@@ -361,6 +361,15 @@ print(test_metrics)
 
 print(f"The train accuracy was {roc_auc_score(train_true, train_predicted):.3f}")
 print(f"The test accuracy was {roc_auc_score(test_true, test_predicted):.3f}")
+
+# save the trained model
+torch.save(net.state_dict(), "../cnn_model.pth")
+
+# load the trained model
+net = torch.hub.load('pytorch/vision:v0.10.0', 'squeezenet1_1', pretrained=True, verbose=False)
+net.classifier[1] = nn.Conv2d(512, num_classes, kernel_size=(1,1), stride=(1,1))
+net = net.to(device)
+net.load_state_dict(torch.load("../cnn_model.pth"))
 
 
 # Deep Feature: CAM-based feature selection
