@@ -15,6 +15,7 @@ library(rsample)
 library(glmnet)
 library(ROCR)
 library(randomForest)
+library(quantable)
 
 # Import
 txi_398 <- readRDS("../rawdata/txi_salmon_n398.rds")
@@ -31,37 +32,51 @@ ddsTxi_virus_398_2 <- ddsTxi_virus_398[keep_virus_398,]
 ddsTxi_virus_398_2 # 21136 -> 20486 (20596?)
 ddsTxi_virus_398_3 <- DESeq(ddsTxi_virus_398_2)
 
-normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>% 
-#  scale() %>%  # scaling will be applied in the python file
+# Make dataset for selecting significant transcriptome
+pre_normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>% 
   as.data.frame() %>%
   rownames_to_column(var = "study_id") %>%
   merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment","intake_sex","Age_mo","raceethn")], by ="study_id") %>%
   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
   mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
 
-variable <- NULL
+tra_variable <- NULL
 for (i in 2:20597){ 
   severe.fit <- glm(severity ~ ., 
                     family = binomial(),
-                    normalized_counts[,c(i,20601:20604)]) # covariates:intake_sex, Age_mo, raceethn
+                    pre_normalized_counts[,c(i,20601:20604)]) # covariates:intake_sex, Age_mo, raceethn
   sum <- summary(severe.fit)
   sum_tran <- sum$coefficients[2,] %>% as.data.frame() %>% t()
-  rownames(sum_tran) <- colnames(normalized_counts)[i]
-  variable <- rbind(variable,sum_tran)
+  rownames(sum_tran) <- colnames(pre_normalized_counts)[i]
+  tra_variable <- rbind(tra_variable,sum_tran)
 }
 
-var_select <- filter(as.data.frame(variable), variable[,4]<0.05)
+tra_var_select <- filter(as.data.frame(tra_variable), tra_variable[,4]<0.05)
+
+# Selecting variable and normalize the dataset
 
 normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>% 
-#  scale() %>%  # scaling will be applied in the python file
+  log1p() %>% # normalization: log(x+1)
   as.data.frame() %>%
-  dplyr::select(rownames(var_select)) %>% 
+  dplyr::select(rownames(tra_var_select)) 
+  
+# MinMax scaling for Deepinsight
+MinMax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+for (i in 1:849){
+  normalized_counts[,i] <- MinMax(normalized_counts[,i])
+}
+
+# Final transcriptome dataset 
+normalized_counts <- normalized_counts %>% 
   rownames_to_column(var = "study_id") %>%
   merge(metadata[,c("study_id","CPAPintubate","inpatient_hfo","IntensiveTreatment","intake_sex","Age_mo")], by ="study_id") %>%
   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
   mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
 
-fwrite(normalized_counts,"../normalized_counts.csv")
+fwrite(normalized_counts,"../transcriptome.csv")
 
 # table <- vst(ddsTxi_virus_398_3)
 # 

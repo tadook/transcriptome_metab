@@ -19,10 +19,10 @@ from pandas import DataFrame
 
 # import host transcriptome dataset
 import pandas as pd
-tra_met_data = pd.read_csv('../normalized_counts.csv') #normalized_counts
+tra_met_data = pd.read_csv('../trans_metab_int.csv') #normalized_counts
 X = tra_met_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
 y = tra_met_data['severity']
-genes = tra_met_data.iloc[:, 1:977].columns.to_numpy()
+genes = tra_met_data.iloc[:, 1:977].columns.to_numpy() # 1:977
 print(X.shape, y.shape)
 
 # generate a binary classification dataset (toy data)
@@ -63,12 +63,12 @@ print(X_train, y_train)
 # X_train_norm = rs.fit_transform(X_train)
 # X_test_norm = rs.transform(X_test)
 
-ln = Norm2Scaler()
-X_train_norm = ln.fit_transform(X_train)
-X_test_norm = ln.transform(X_test)
+# ln = Norm2Scaler()
+# X_train_norm = ln.fit_transform(X_train)
+# X_test_norm = ln.transform(X_test)
 
-# X_train_norm = X_train
-# X_test_norm = X_test
+X_train_norm = X_train
+X_test_norm = X_test
 
 X_train_norm = X_train_norm.fillna(0)
 X_test_norm = X_test_norm.fillna(0)
@@ -139,7 +139,7 @@ fig.show()
 
 from pyDeepInsight import ImageTransformer
 
-pixel_size = (112,112)
+pixel_size = (384,384)
 it = ImageTransformer(
     feature_extractor=reducer,
     pixels=pixel_size)
@@ -151,6 +151,14 @@ X_test_img = it.transform(X_test_norm)
 X_train_img.shape, X_test_img.shape
 
 import matplotlib.pyplot as plt
+
+# save X_train/test_img and y_train/test for Google
+import numpy
+
+numpy.save('outputs/tramet112/X_train_img.npy',X_train_img)
+numpy.save('outputs/tramet112/X_test_img.npy',X_test_img)
+y_train.to_pickle('outputs/tramet112/y_train.pkl')
+y_test.to_pickle('outputs/tramet112/y_test.pkl')
 
 # fig, axs = plt.subplots(ncols=5, figsize=(3, 6))
 # for i in range(5):
@@ -204,7 +212,7 @@ plt.show()
 import os
 from PIL import Image
 
-output_img_dir = "outputs/input_imgs_tramet"
+output_img_dir = "outputs/input_imgs_tramet_112"
 
 for split, X, y in zip(['train', 'test'], [X_train_img, X_test_img], [y_train, y_test]):
   for c in range(num_classes):
@@ -224,6 +232,7 @@ for split, X, y in zip(['train', 'test'], [X_train_img, X_test_img], [y_train, y
 
       img_path = os.path.join(output_img_class_dir, f"idx{idx}_class{label}.png")
       Image.fromarray((img * 255).astype(np.uint8)).save(img_path)
+
 
 
 # CNN 
@@ -369,7 +378,7 @@ torch.save(net.state_dict(), "../cnn_model.pth")
 net = torch.hub.load('pytorch/vision:v0.10.0', 'squeezenet1_1', pretrained=True, verbose=False)
 net.classifier[1] = nn.Conv2d(512, num_classes, kernel_size=(1,1), stride=(1,1))
 net = net.to(device)
-net.load_state_dict(torch.load("../cnn_model.pth"))
+net.load_state_dict(torch.load("../cnn_model.pth", map_location=torch.device('cpu'))) # in GPU environment, we don't need map_location option
 
 
 # Deep Feature: CAM-based feature selection
@@ -437,15 +446,26 @@ plt.show()
 
 ### Category
 for cat, idx in feat_idx.items():
-    feature_names = genes[idx]
+    feature_names = genes[idx-1] # idx
     print(f"{idx.shape[0]:5} features selected for {le_mapping[cat]:4}: {', '.join(feature_names[1:10])}...")
-
+    
     feat = pd.DataFrame()
+
+feature_severe = genes[list(feat_idx.items())[1][1]]
+feature_severe
+
+#### save the feature
+import csv
+
+f = open('../feature_severe.csv', 'w')
+writer = csv.writer(f)
+writer.writerow(feature_severe)
+f.close()
 
 ### Table
 feat = pd.DataFrame()
 for cat, idx in feat_idx.items():
-    feature_names = genes[idx]
+    feature_names = genes[idx-1] # idx
     feat = pd.concat([feat, pd.DataFrame({'severity':le_mapping[cat], 'gene':feature_names})])
 fdf = feat.assign(selected=1).pivot(index='severity', columns='gene', values="selected").fillna(0).astype(int)
 

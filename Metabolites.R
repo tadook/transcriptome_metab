@@ -10,6 +10,8 @@ library(RColorBrewer)
 library(colourvalues)
 library(readr)
 library(Rcpm) # devtools::install_github("ricoderks/Rcpm") # Git needs to be installed
+library(bnlearn)
+library(Rgraphviz) # BiocManager::install("Rgraphviz")
 
 # Import dataset ----------------------------------------------------------
 
@@ -40,7 +42,14 @@ df_metabolome_combat<-t(combat_normdata1)  # data includes negative values. This
 
 df_metabolome_norm <- pqn(df_metabolome_combat)
 
-# df_metabolome_norm <- df_metabolome_combat # for integrated analysis
+# MinMax scaling for the Deepinsight analysis
+MinMax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+for (i in 1:285){
+  df_metabolome_norm[,i] <- MinMax(df_metabolome_norm[,i])
+}
 
 # extract uid names -------------------------------------------------------
 
@@ -51,7 +60,7 @@ rownames(df_metabolome_norm_uid) <- NULL
 # Import metadata and outcome (asthma) data -------------------------------
 
 df_metadata <- readstata13::read.dta13("../rawdata/m35_metadata_modified2019.dta") %>%
-  select(uid, study_id, 
+  dplyr::select(uid, study_id, 
          Age_mo,intake_sex,raceethn,premature37,intake_child_weight_born,mata_delivery,
          prev_breathingprob,icu_previous,intake_daycare,intake_smoke,mata_smoke,
          parent_asthma, parent_eczema,intch_weight,intch_respiratory_rate,o2sat_initial,
@@ -103,9 +112,57 @@ var_select <- filter(as.data.frame(variable), variable[,4]<0.05)
 
 # Merge metabolites and transcriptome data --------------------------------
 
-transcriptome_variables <- read_csv("../normalized_counts.csv")
+transcriptome_variables <- read_csv("../transcriptome.csv")
 metab_data <- metabo_variables %>%  dplyr::select("study_id",rownames(var_select)) 
-met_tra_variables <- merge(metab_data, transcriptome_variables, by = "study_id")
+fwrite(metab_data,"../metabolites.csv")
 
-fwrite(met_tra_variables,"../normalized_counts.csv")
+metab_trans <- merge(metab_data, transcriptome_variables, by = "study_id")
+metab_trans <- metab_trans[,c(1,979:984,2:978)]
 
+fwrite(metab_trans,"../trans_metab.csv")
+
+# Make interaction term ---------------------------------------------------
+
+for (i in 8:135){ # This loop takes about 15 minutes
+  for(k in 136:984){
+    add_column <- data.frame(metab_trans[,i] * metab_trans[,k])
+    colnames(add_column) <- paste0(colnames(metab_trans)[i],"-",colnames(metab_trans)[k])
+    metab_trans <- cbind(metab_trans, add_column)
+  }
+} 
+
+## MinMax scaling for interaction terms
+
+for (i in 985:109656){
+  metab_trans[,i] <- MinMax(metab_trans[,i])
+}
+
+metab_trans_int <- metab_trans
+fwrite(metab_trans_int,"../trans_metab_int.csv")
+
+# (After the main analysis) Bayesian network analysis ---------------------
+## https://qiita.com/hrkz_szk/items/a213c2c4ba823cbf78f6
+
+feature_severe <- read_csv("../feature_severe.csv")
+bayesian_var <- met_tra_variables[,c("severity",colnames(feature_severe))]
+
+dag = hc(bayesian_var, score = "bic-g") # whitelist = wl, blacklist = bl
+dag
+
+graphviz.plot(dag, shape = "ellipse")
+
+## boot strap
+
+set.seed(1)
+str.diff = boot.strength(bayesian_var, R = 200, algorithm = "hc",
+                         algorithm.args = list(score="bic-g")) #gs, iamb, mmpc and hc
+
+head(str.diff)
+attr(str.diff, "threshold")
+plot(str.diff)
+
+avg.diff = averaged.network(str.diff)
+strength.plot(avg.diff, str.diff, shape = "ellipse") # threshold = attr(str.diff, "threshold")
+
+avg.simpler = averaged.network(str.diff, threshold = 0.25) # change threshold
+strength.plot(avg.simpler, str.diff, shape = "ellipse")
