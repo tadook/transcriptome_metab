@@ -22,7 +22,7 @@ import pandas as pd
 tra_met_data = pd.read_csv('../trans_metab_int.csv') #normalized_counts
 X = tra_met_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
 y = tra_met_data['severity']
-genes = tra_met_data.iloc[:, 1:977].columns.to_numpy() # 1:977
+genes = tra_met_data.iloc[:, 1:109649].columns.to_numpy() # 1:977
 print(X.shape, y.shape)
 
 # generate a binary classification dataset (toy data)
@@ -144,8 +144,7 @@ it = ImageTransformer(
     feature_extractor=reducer,
     pixels=pixel_size)
     
-it.fit(X_train, y=y_train, plot=True) # it takes 3 minites in case of "n:400, feature:20000"
-X_train_img = it.transform(X_train_norm)
+it.fit(X_train, y=y_train, plot=True) # it takes about 20 minites
 X_test_img = it.transform(X_test_norm)
 
 X_train_img.shape, X_test_img.shape
@@ -155,13 +154,13 @@ import matplotlib.pyplot as plt
 # save X_train/test_img and y_train/test for Google
 import numpy
 
-numpy.save('outputs/tramet112/X_train_img.npy',X_train_img)
-numpy.save('outputs/tramet112/X_test_img.npy',X_test_img)
-y_train.to_pickle('outputs/tramet112/y_train.pkl')
-y_test.to_pickle('outputs/tramet112/y_test.pkl')
+numpy.save('outputs/tramet_int/X_train_img.npy',X_train_img)
+numpy.save('outputs/tramet_int/X_test_img.npy',X_test_img)
+y_train.to_pickle('outputs/tramet_int/y_train.pkl')
+y_test.to_pickle('outputs/tramet_int/y_test.pkl')
 
 # fig, axs = plt.subplots(ncols=5, figsize=(3, 6))
-# for i in range(5):
+# for i igigitn range(5):
 #   img = X_train_img[i]
 #   label = y_train.iloc[i] # add ".iloc" which means integer based location.
 #   print(f"{img.shape}, {img.min()}, {img.mean(axis=(0, 1))}, {img.max()}")
