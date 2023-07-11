@@ -1,0 +1,317 @@
+---
+title: "Figures for Deep network Research"
+author: "Tadao Ooka"
+output: html_notebook
+---
+
+# Pathway analysis
+```{r}
+library(RColorBrewer)
+library(ggplot2)
+library(dplyr)
+
+df_enrich <- read.csv("../results_data/MetaboAnalyst_result_pathway.csv")
+
+rename(df_enrich, pathway = X) -> df_enrich
+
+## Set a color palette
+
+colors=c( "#C7E9B4" ,"#7FCDBB" ,"#41B6C4" ,"#1D91C0", "#225EA8", "#0C2C84")
+
+rwb2 <- colorRampPalette(colors = colors)(300)
+
+df_enrich <-
+  df_enrich %>% dplyr::arrange(desc(-log(`FDR`,10))) %>%
+    top_n(25, wt=-`FDR`) %>% 
+    mutate(hitsPerc=`Hits`*100/`Total`)
+
+png("../results_data/MetaboAnalyst_pathway_analysis.png", 
+    units="in", width=9, height=5, res = 300)
+
+ggplot(aes(x=-log(`FDR`,10),
+             y=reorder(`pathway`,-`FDR`), 
+             colour=hitsPerc, 
+             size=`Impact`),
+             data=df_enrich ) +
+  geom_point() +
+  expand_limits(x=2) +scale_color_gradientn(colours=rwb2 , space = "Lab", na.value = "#C6DBEF" ,guide=guide_colorbar(reverse=F))+
+  labs(x=expression(paste("-log"[10],"FDR")), y="KEGG term", colour="Percentage \n of hit components", size="Pathway impact*")+theme_minimal() + theme(axis.text.y = element_text(size=12)) 
+
+dev.off()
+
+```
+
+# Pathway analysis with RSV/HRV
+```{r}
+
+df_enrich_RSV <- read.csv("../results_data/MetaboAnalyst_pathway_RSV.csv")
+df_enrich_HRV <- read.csv("../results_data/MetaboAnalyst_pathway_HRV.csv")
+
+rename(df_enrich_RSV, pathway = X) -> df_enrich_RSV
+rename(df_enrich_HRV, pathway = X) -> df_enrich_HRV
+
+## Set a color palette
+
+colors=c( "#C7E9B4" ,"#7FCDBB" ,"#41B6C4" ,"#1D91C0", "#225EA8", "#0C2C84")
+
+rwb2 <- colorRampPalette(colors = colors)(300)
+
+## RSV
+df_enrich_RSV <-
+  df_enrich_RSV %>% dplyr::arrange(desc(-log(`FDR`,10))) %>%
+    top_n(25, wt=-`FDR`) %>% 
+    mutate(hitsPerc=`Hits`*100/`Total`)
+
+png("../results_data/MetaboAnalyst_pathway_RSV.png", 
+    units="in", width=9, height=5, res = 300)
+
+ggplot(aes(x=-log(`FDR`,10),
+             y=reorder(`pathway`,-`FDR`), 
+             colour=hitsPerc, 
+             size=`Impact`),
+             data=df_enrich_RSV) +
+  geom_point() +
+  expand_limits(x=2) +scale_color_gradientn(colours=rwb2 , space = "Lab", na.value = "#C6DBEF" ,guide=guide_colorbar(reverse=F))+
+  labs(x=expression(paste("-log"[10],"FDR")), y="KEGG term", colour="Percentage \n of hit components", size="Pathway impact*")+theme_minimal() + theme(axis.text.y = element_text(size=12)) 
+
+dev.off()
+
+## HRV
+df_enrich_HRV <-
+  df_enrich_HRV %>% dplyr::arrange(desc(-log(`FDR`,10))) %>%
+    top_n(25, wt=-`FDR`) %>% 
+    mutate(hitsPerc=`Hits`*100/`Total`)
+
+png("../results_data/MetaboAnalyst_pathway_HRV.png", 
+    units="in", width=9, height=5, res = 300)
+
+ggplot(aes(x=-log(`FDR`,10),
+             y=reorder(`pathway`,-`FDR`), 
+             colour=hitsPerc, 
+             size=`Impact`),
+             data=df_enrich_HRV) +
+  geom_point() +
+  expand_limits(x=2) +scale_color_gradientn(colours=rwb2 , space = "Lab", na.value = "#C6DBEF" ,guide=guide_colorbar(reverse=F))+
+  labs(x=expression(paste("-log"[10],"FDR")), y="KEGG term", colour="Percentage \n of hit components", size="Pathway impact*")+theme_minimal() + theme(axis.text.y = element_text(size=12)) 
+
+dev.off()
+
+```
+
+# Drug ranking
+```{r}
+library(RColorBrewer)
+library(ggplot2)
+
+df_drug1 <- read.csv("../results_data/TrustRank_network1.csv")
+df_drug2 <- read.csv("../results_data/TrustRank_network2.csv")
+
+# Network 1
+## Set a color palette
+
+colors=rev(c( 
+    "#914f09", 
+    "#a95c0a", 
+    "#c1690c", 
+    "#d9760d", 
+    "#f1830f", 
+    "#FE9929", 
+    "#ffbc45", 
+    "#ffc55f", 
+    "#ffce78", 
+    "#ffd892"
+))
+
+rwb2 <- colorRampPalette(colors = colors)(300)
+
+df_drug <- df_drug1 %>% filter(type=="Drug")
+
+
+df_drug <-
+  df_drug %>% dplyr::arrange(-log(`score`,10))
+
+png("../results_data/Drug_ranking2.png", 
+    units="in",width=6, height=4, res = 300) # width=8, height=5,
+
+ggplot(aes(x=log(`score`,10),
+             y=reorder(`displayName`,log(`score`,10)), 
+             colour=`BetweennessCentrality`,
+             size=`ClosenessCentrality`), 
+             data=df_drug ) +
+  geom_point() +
+#  coord_cartesian(xlim = c(-4.5, -3.3)) +
+  coord_cartesian(xlim = c(-4.5, -3.8)) +
+  expand_limits(x=2) +scale_color_gradientn(colours=rwb2 , space = "Lab", na.value = "#C6DBEF" ,guide=guide_colorbar(reverse=F))+
+  labs(x=expression(paste("log"[10]," Trustworthiness score")), y="Drug name", colour="Betweenness centrality", size="Closeness centrality")+theme_minimal() + theme(axis.text.y = element_text(size=12)) 
+
+dev.off()
+
+# Network 2
+## Set a color palette
+
+colors=rev(c( 
+    "#914f09", 
+    "#a95c0a", 
+    "#c1690c", 
+    "#d9760d", 
+    "#f1830f", 
+    "#FE9929", 
+    "#ffbc45", 
+    "#ffc55f", 
+    "#ffce78", 
+    "#ffd892"
+))
+
+rwb2 <- colorRampPalette(colors = colors)(300)
+
+df_drug <- df_drug2 %>% filter(type=="Drug")
+
+df_drug <-
+  df_drug %>% dplyr::arrange(-log(`score`,10))
+
+png("../results_data/Drug_ranking2.png", 
+    units="in",width=6, height=4, res = 300) # width=8, height=5,
+
+ggplot(aes(x=log(`score`,10),
+             y=reorder(`displayName`,log(`score`,10)), 
+             colour=`BetweennessCentrality`,
+             size=`ClosenessCentrality`), 
+             data=df_drug ) +
+  geom_point() +
+#  coord_cartesian(xlim = c(-4.5, -3.3)) +
+  coord_cartesian(xlim = c(-4.5, -3.8)) +
+  expand_limits(x=2) +scale_color_gradientn(colours=rwb2 , space = "Lab", na.value = "#C6DBEF" ,guide=guide_colorbar(reverse=F))+
+  labs(x=expression(paste("log"[10]," Trustworthiness score")), y="Drug name", colour="Betweenness centrality", size="Closeness centrality")+theme_minimal() + theme(axis.text.y = element_text(size=12)) 
+
+dev.off()
+
+```
+
+# for Table1 and eTable2
+```{r}
+library(tidyverse)
+library(tableone)
+library(readxl)
+library(readstata13)
+
+metadata <- read_xlsx("../rawdata/m35_metadata_n1016_2023.03.28.xlsx") 
+txi_398 <- read.csv("../rawdata/metadata_DESeq_n398.csv")
+batchdata <- read.csv(file="../rawdata/batch_npa.csv", header=TRUE, sep=",",check.names=FALSE)
+add_metadata <-read.dta13("../rawdata/m35_metadata_n1016_2018march.dta")
+
+## Table1
+
+df_metadata <- merge(metadata, txi_398["study_id"], by="study_id") %>% 
+  merge(batchdata["study_id"], by="study_id") %>% 
+  mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
+  mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
+
+# Recoding
+df_metadata$intake_sex <- df_metadata$intake_sex %>% as.factor()
+df_metadata$raceethn <- df_metadata$raceethn %>% as.factor()
+df_metadata$birth_season <- df_metadata$birth_season %>% as.factor()
+df_metadata$prev_breathingprob2 <- ifelse(df_metadata$prev_breathingprob==0, 0, 1) %>% as.factor()
+df_metadata$parent_asthma[is.na(df_metadata$parent_asthma)] <- 0
+df_metadata$parent_eczema[is.na(df_metadata$parent_eczema)] <- 0
+df_metadata$parent_asthma <- df_metadata$parent_asthma %>% as.factor()
+df_metadata$parent_eczema <- df_metadata$parent_eczema %>% as.factor()
+df_metadata$o2sat_initial_3cat<-df_metadata$o2sat_initial
+df_metadata$o2sat_initial_3cat[df_metadata$o2sat_initial_3cat == 1] <- 2      
+df_metadata$anyIgE <- ifelse(df_metadata$IgE_any_food==1, 1,
+                             ifelse(df_metadata$aeroallergens_atopy==1, 1,
+                                    0)) %>% as.factor()
+df_metadata$RVA_NPAseq[is.na(df_metadata$RVA_NPAseq)] <- 0
+df_metadata$RVB_NPAseq[is.na(df_metadata$RVB_NPAseq)] <- 0
+df_metadata$RVC_NPAseq[is.na(df_metadata$RVC_NPAseq)] <- 0
+df_metadata <- merge(df_metadata, add_metadata[,c(1,80:95)], by="study_id") %>%  
+               mutate(other_pathogen = ifelse((Adenovirus==1 | Bpertussis==1 | Bocavirus==1 | Entero==1 | FluA==1 | FluB==1 | hMPV==1 | myco_pneumoniae==1 | PIV1==1 | PIV2==1 | PIV3==1 | hCoNL63==1 | hCoOC43==1 | hCoV229E==1 | hCoVHKU1==1 ),1,0)) %>% 
+               mutate(other_pathogen_only = ifelse(other_pathogen == 1, ifelse((RV_NPA == 0 & RSV_NPA == 0),1,0),0)) %>% 
+               mutate(other_pathogen_co = ifelse(other_pathogen == 1, ifelse((RV_NPA == 1 | RSV_NPA == 1),ifelse((RV_NPA == 1 & RSV_NPA == 1),0,1),0),0)) %>% 
+               mutate(RS_RSV_co = ifelse((RV_NPA == 1 & RSV_NPA == 1),1,0)) %>% 
+               mutate(nonRSV_RSV_co = ifelse((other_pathogen == 1 & RSV_NPA == 1),1,0)) 
+
+## Vector of variables to summarize
+myVars <- c("site","Age_mo","intake_sex","raceethn","gestage","cr0_weight_birth_kg","premature37","intake_child_weight_born",
+            "breastmilk_mostly_3mo","intake_eczema_history","prev_breathingprob","antibiotics_life",
+            "corticosteroids_life","corticosteroids_recent","mom_age_delivery","mata_smoke","mata_delivery","icu_previous",
+            "parent_asthma","parent_eczema","intake_daycare","numb_children_home","intake_smoke","intch_weight",
+            "intch_respiratory_rate","o2sat_initial","o2sat_initial_3cat","intch_wheezing","bp_prior1day","intch_antibiotics_ed",
+            "abx_pre_inp","corticosteroids_pre","corticosteroids_pre_inp","CPAPintubate","IntensiveTreatment",
+            "LOS_dys","eos_4perc","anyIgE","recurrent_wheeze_sleep_36mo","RWsleep_time2event_36mo", "inpatient_hfo",
+            "RV_NPA","RSVA_NPA","RSVB_NPA","RSV_NPA","RSV_CT_NPA","HRV_CT_NPA","aeroallergens_atopy","other_pathogen", "other_pathogen_only","RS_RSV_co",
+            "IgE_any_food","RANTES_pgml","LL37_ngml",
+            "RVA_NPAseq","RVB_NPAseq","RVC_NPAseq")
+
+## Vector of categorical variables that need transformation
+catVars <- c("site","raceethn","gestage","premature37","intake_child_weight_born","prev_breathingprob","mata_delivery","mata_smoke","numb_children_home",
+             "antibiotics_life","o2sat_initial","o2sat_initial_3cat","corticosteroids_pre","corticosteroids_pre_inp","eos_4perc","anyIgE","intake_eczema_history","intake_daycare",
+             "intake_smoke","intch_wheezing","icu_previous","CPAPintubate","IntensiveTreatment","recurrent_wheeze_sleep_36mo","inpatient_hfo",
+             "RV_NPA","RSVA_NPA","RSVB_NPA","RSV_NPA","RVA_NPAseq","RVB_NPAseq","RVC_NPAseq","other_pathogen","other_pathogen_only","RS_RSV_co")
+
+nonNormalVars <- c("Age_mo","cr0_weight_birth_kg","intch_weight","intch_respiratory_rate","LOS_dys")
+tab1 <- CreateTableOne(vars = myVars, strata = "severity" , data = df_metadata, factorVars = catVars)
+tab1_all <- CreateTableOne(vars = myVars, data = df_metadata, factorVars = catVars)
+tab1_mat <- print(tab1, nonnormal = nonNormalVars, showAllLevels = TRUE)
+tab1_all_mat <- print(tab1_all, nonnormal = nonNormalVars, showAllLevels = TRUE)
+
+write.csv(tab1_mat, file = "Table1.csv")
+write.csv(tab1_all_mat, file = "Table1_all.csv")
+
+# Table S2
+
+df_metadata2 <- metadata %>% 
+  mutate(cohort = ifelse(study_id %in% df_metadata$study_id, 1, 0)) %>% 
+  mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
+  mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
+
+df_metadata2$intake_sex <- df_metadata2$intake_sex %>% as.factor()
+df_metadata2$raceethn <- df_metadata2$raceethn %>% as.factor()
+df_metadata2$birth_season <- df_metadata2$birth_season %>% as.factor()
+df_metadata2$prev_breathingprob2 <- ifelse(df_metadata2$prev_breathingprob==0, 0, 1) %>% as.factor()
+df_metadata2$parent_asthma[is.na(df_metadata2$parent_asthma)] <- 0
+df_metadata2$parent_eczema[is.na(df_metadata2$parent_eczema)] <- 0
+df_metadata2$parent_asthma <- df_metadata2$parent_asthma %>% as.factor()
+df_metadata2$parent_eczema <- df_metadata2$parent_eczema %>% as.factor()
+df_metadata2$o2sat_initial_3cat<-df_metadata2$o2sat_initial
+df_metadata2$o2sat_initial_3cat[df_metadata2$o2sat_initial_3cat == 1] <- 2      
+df_metadata2$anyIgE <- ifelse(df_metadata2$IgE_any_food==1, 1,
+                             ifelse(df_metadata2$aeroallergens_atopy==1, 1,
+                                    0)) %>% as.factor()
+df_metadata2$RVA_NPAseq[is.na(df_metadata2$RVA_NPAseq)] <- 0
+df_metadata2$RVB_NPAseq[is.na(df_metadata2$RVB_NPAseq)] <- 0
+df_metadata2$RVC_NPAseq[is.na(df_metadata2$RVC_NPAseq)] <- 0
+df_metadata2 <- merge(df_metadata2, add_metadata[,c(1,80:95)], by="study_id") %>%  
+               mutate(other_pathogen = ifelse((Adenovirus==1 | Bpertussis==1 | Bocavirus==1 | Entero==1 | FluA==1 | FluB==1 | hMPV==1 | myco_pneumoniae==1 | PIV1==1 | PIV2==1 | PIV3==1 | hCoNL63==1 | hCoOC43==1 | hCoV229E==1 | hCoVHKU1==1 ),1,0)) %>% 
+               mutate(other_pathogen_only = ifelse(other_pathogen == 1, ifelse((RV_NPA == 0 & RSV_NPA == 0),1,0),0)) %>% 
+               mutate(other_pathogen_co = ifelse(other_pathogen == 1, ifelse((RV_NPA == 1 | RSV_NPA == 1),ifelse((RV_NPA == 1 & RSV_NPA == 1),0,1),0),0)) %>% 
+               mutate(RS_RSV_co = ifelse((RV_NPA == 1 & RSV_NPA == 1),1,0)) %>% 
+               mutate(nonRSV_RSV_co = ifelse((other_pathogen == 1 & RSV_NPA == 1),1,0)) 
+
+## Vector of variables to summarize
+myVars <- c("site","Age_mo","intake_sex","raceethn","gestage","cr0_weight_birth_kg","premature37","intake_child_weight_born",
+            "breastmilk_mostly_3mo","intake_eczema_history","prev_breathingprob","antibiotics_life",
+            "corticosteroids_life","corticosteroids_recent","mom_age_delivery","mata_smoke","mata_delivery","icu_previous",
+            "parent_asthma","parent_eczema","intake_daycare","numb_children_home","intake_smoke","intch_weight",
+            "intch_respiratory_rate","o2sat_initial","o2sat_initial_3cat","intch_wheezing","bp_prior1day","intch_antibiotics_ed",
+            "abx_pre_inp","corticosteroids_pre","corticosteroids_pre_inp","CPAPintubate","IntensiveTreatment",
+            "LOS_dys","eos_4perc","anyIgE","recurrent_wheeze_sleep_36mo","RWsleep_time2event_36mo", "inpatient_hfo",
+            "RV_NPA","RSVA_NPA","RSVB_NPA","RSV_NPA","RSV_CT_NPA","HRV_CT_NPA","aeroallergens_atopy","other_pathogen", "other_pathogen_only","RS_RSV_co",
+            "IgE_any_food","RANTES_pgml","LL37_ngml",
+            "RVA_NPAseq","RVB_NPAseq","RVC_NPAseq","severity")
+
+## Vector of categorical variables that need transformation
+catVars <- c("site","raceethn","gestage","premature37","intake_child_weight_born","prev_breathingprob","mata_delivery","mata_smoke","numb_children_home",
+             "antibiotics_life","o2sat_initial","o2sat_initial_3cat","corticosteroids_pre","corticosteroids_pre_inp","eos_4perc","anyIgE","intake_eczema_history","intake_daycare",
+             "intake_smoke","intch_wheezing","icu_previous","CPAPintubate","IntensiveTreatment","recurrent_wheeze_sleep_36mo","inpatient_hfo",
+             "RV_NPA","RSVA_NPA","RSVB_NPA","RSV_NPA","RVA_NPAseq","RVB_NPAseq","RVC_NPAseq","other_pathogen","other_pathogen_only","RS_RSV_co","severity")
+
+nonNormalVars <- c("Age_mo","cr0_weight_birth_kg","intch_weight","intch_respiratory_rate","LOS_dys")
+tabs2 <- CreateTableOne(vars = myVars, strata = "cohort" , data = df_metadata2, factorVars = catVars)
+tabs2_mat <- print(tabs2, nonnormal = nonNormalVars, showAllLevels = TRUE)
+
+write.csv(tabs2_mat, file = "TableS2.csv")
+
+
+```
+
+

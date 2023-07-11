@@ -3,6 +3,8 @@
 library(DESeq2) # BiocManager::install("DESeq2")
 library(ggbio) # BiocManager::install("ggbio")
 library(tximport) # BiocManager::install("tximport")
+# library(quantable) # BiocManager::install("quantable")
+library(readxl)
 library(pheatmap)
 library(stringr)
 library(tidyverse)
@@ -15,21 +17,29 @@ library(rsample)
 library(glmnet)
 library(ROCR)
 library(randomForest)
-library(quantable)
+library(biomaRt) 
+library(baizer)
 
 # Import
-txi_398 <- readRDS("../rawdata/txi_salmon_n398.rds")
-transcript_398_df_mod <- read_csv("../rawdata/metadata_DESeq_n398.csv")
-metadata <- read_dta("../rawdata/m35_metadata_n1016_2018march.dta")
+txi_398 <- readRDS("../rawdata/txi_mrna_salmon_n398.rds")
+metadata <- read_xlsx("../rawdata/m35_metadata_n1016_2023.03.28.xlsx") 
+
+txi_398 %>% 
+  .[[1]] %>% 
+  colnames -> Subjects
+
+metadata %>% 
+  filter(study_id %in% Subjects) %>% 
+  c2r("study_id") -> Clinicaldata_mRNA_All_df
 
 # Merge files
 ddsTxi_virus_398 <- DESeqDataSetFromTximport(txi_398,
-                                             colData = transcript_398_df_mod,
-                                             design = ~ 1)
+                                             colData = Clinicaldata_mRNA_All_df[Subjects, ],
+                                             design = ~ 1)　
 
 keep_virus_398 <- rowSums(counts(ddsTxi_virus_398)) >= 10 # remove mRNA counts < 10
 ddsTxi_virus_398_2 <- ddsTxi_virus_398[keep_virus_398,]
-ddsTxi_virus_398_2 # 21136 -> 20486 (20596?)
+ddsTxi_virus_398_2 # 21136 -> 20596
 ddsTxi_virus_398_3 <- DESeq(ddsTxi_virus_398_2)
 
 # Make dataset for selecting significant transcriptome
@@ -44,7 +54,8 @@ tra_variable <- NULL
 for (i in 2:20597){ 
   severe.fit <- glm(severity ~ ., 
                     family = binomial(),
-                    pre_normalized_counts[,c(i,20601:20604)]) # covariates:intake_sex, Age_mo, raceethn
+                    pre_normalized_counts[,c(i,20601:20604)]) # covariates:intake_sex, Age_mo, raceethn; outcome: severity
+  
   sum <- summary(severe.fit)
   sum_tran <- sum$coefficients[2,] %>% as.data.frame() %>% t()
   rownames(sum_tran) <- colnames(pre_normalized_counts)[i]
@@ -59,15 +70,49 @@ normalized_counts <- t(counts(ddsTxi_virus_398_3, normalized=TRUE)) %>%
   log1p() %>% # normalization: log(x+1)
   as.data.frame() %>%
   dplyr::select(rownames(tra_var_select)) 
-  
-# MinMax scaling for Deepinsight
+
+# Normalization for DeepInsight
+## Check the distribution before normalization
+hist(normalized_counts[,4])
+
+## Robust scaling for the Deepinsight analysis
+Robust_scale <- function(x) {
+  interquartile = quantile(x)[4] - quantile(x)[2]
+  x[ quantile(x)[4] == 0 ] <- x  # for zero skewed variable
+  x[ quantile(x)[4] != 0 ] <- (x - median(x)) / interquartile
+  x
+}
+
+for (i in 1:588){
+  normalized_counts[,i] <- Robust_scale(normalized_counts[,i])
+}
+
+## Convert the outlier
+Conv_outlier <- function(x) {
+  interquartile = quantile(x)[4] - quantile(x)[2]
+  quartile_min = quantile(x)[2] - 1.5 * interquartile
+  quartile_max = quantile(x)[4] + 1.5 * interquartile
+  x[ quantile(x)[4] != 0 & x < quartile_min ] <- quartile_min
+  x[ quantile(x)[4] != 0 & x > quartile_max ] <- quartile_max
+  x
+}
+
+for (i in 1:588){
+  normalized_counts[,i] <- Conv_outlier(normalized_counts[,i])
+}
+
+## Min-max scale
 MinMax <- function(x) {
   (x - min(x)) / (max(x) - min(x))
 }
 
-for (i in 1:849){
+for (i in 1:588){
   normalized_counts[,i] <- MinMax(normalized_counts[,i])
 }
+
+## Check the distribution after normalization
+hist(normalized_counts[,4])
+
 
 # Final transcriptome dataset 
 normalized_counts <- normalized_counts %>% 
@@ -76,7 +121,29 @@ normalized_counts <- normalized_counts %>%
   mutate(severity = ifelse(CPAPintubate == 1, 1, ifelse(inpatient_hfo == 1, 1, 0))) %>% 
   mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
 
+# Convert ensembl id to gene symbol
+# mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+# genes <- colnames(normalized_counts)[c(-1,-851:-856)]
+# G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id",
+#                                                           "hgnc_symbol"),values=genes,mart= mart)
+# genes_df <- data.frame(genes)
+# colnames(genes_df) <- "ensembl_gene_id"
+# G_list <- left_join(genes_df, G_list,  by="ensembl_gene_id")
+# 
+# for (i in 1:nrow(G_list)){
+#  G_list[i,] <- G_list[i,] %>% mutate(hgnc_symbol = ifelse((hgnc_symbol=="" | is.na(hgnc_symbol)) , ensembl_gene_id, hgnc_symbol))
+# }
+# 
+# for (i in 2:850){
+#  names(normalized_counts)[which(names(normalized_counts)==colnames(normalized_counts[i]))] <- G_list[grep(colnames(normalized_counts[i]),G_list$ensembl_gene_id),2]
+# }
+
+# Check the missing values
+table(is.na(normalized_counts))
+
+# Save the data
 fwrite(normalized_counts,"../transcriptome.csv")
+
 
 # table <- vst(ddsTxi_virus_398_3)
 # 
@@ -88,6 +155,8 @@ fwrite(normalized_counts,"../transcriptome.csv")
 #   mutate(intake_sex = ifelse(intake_sex == 2, 1, 0))
 # 
 # fwrite(trans_data,"trans_data.csv")
+
+
 
 
 # Lasso regression -- simple prediction
@@ -109,6 +178,7 @@ lasso_train_y <- lasso_train[,"severity"]
 lasso_test$severity <- factor(lasso_test$severity) %>% factor(labels = c("No", "Yes")) # severity
 lasso_test_x <- lasso_test[,2:161] %>% data.matrix() # 2:20597 2:858
 lasso_test_y <- lasso_test[,"severity"] 
+
 
 # Create model
 ## Lasso
