@@ -2,7 +2,7 @@ library("AnnotationDbi")
 library("org.Hs.eg.db")
 
 # RSV
-data_RSV <- read.csv("../Network/Cytoscape/RSV_genes", header = FALSE)
+data_RSV <- read.csv("../Network/Cytoscape/RSV_genes.csv", header = FALSE)
 
 data_RSV$entrez = mapIds(org.Hs.eg.db,
                      keys=data_RSV$V1, #Column containing Ensembl gene ids
