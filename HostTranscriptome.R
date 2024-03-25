@@ -23,6 +23,11 @@ library(baizer)
 # Import
 txi_398 <- readRDS("../rawdata/txi_mrna_salmon_n398.rds")
 metadata <- read_xlsx("../rawdata/m35_metadata_n1016_2023.03.28.xlsx") 
+batchdata <- read.csv(file="../rawdata/batch_npa.csv", header=TRUE, sep=",",check.names=FALSE)
+phenodata <-  batchdata %>% merge(txi_398,by="study_id",all.y=F)
+phenodata1 <- phenodata[,-2]
+rownames(phenodata1) <- phenodata[,2]
+batch = phenodata1$batch
 
 txi_398 %>% 
   .[[1]] %>% 
@@ -35,7 +40,7 @@ metadata %>%
 # Merge files
 ddsTxi_virus_398 <- DESeqDataSetFromTximport(txi_398,
                                              colData = Clinicaldata_mRNA_All_df[Subjects, ],
-                                             design = ~ 1)　
+                                             design = ~ batch) # ~ 1　
 
 keep_virus_398 <- rowSums(counts(ddsTxi_virus_398)) >= 10 # remove mRNA counts < 10
 ddsTxi_virus_398_2 <- ddsTxi_virus_398[keep_virus_398,]
@@ -61,6 +66,20 @@ for (i in 2:20597){
   rownames(sum_tran) <- colnames(pre_normalized_counts)[i]
   tra_variable <- rbind(tra_variable,sum_tran)
 }
+
+# p-value distribution
+tra_pvalue <-　log10(tra_variable[,4])
+tra_fdr <- p.adjust(variable[,4], method = "fdr")
+tra_fdr_threshold <- max(variable[,4][tra_fdr <= 0.01])
+breaks <- seq(-7, 0, length.out = 100)
+num_p_less_than_0_05 <- sum(tra_pvalue < log10(0.05))
+num_fdr_less_than_0_01 <- sum(tra_fdr < 0.01)
+
+hist(tra_pvalue, breaks = breaks, xlab = "Log10(p-value)", ylab = "Frequency", main = "Histogram on log10(p-value) for mRNAs")
+abline(v = log10(0.05), col = "red", lty = "solid")
+abline(v = log10(tra_fdr_threshold), col = "blue", lty = "dotted")
+text(log10(0.05), par("usr")[4]*0.9, labels = "p < 0.05\n 588 mRNAs", pos = 2, col = "red")
+text(log10(met_fdr_threshold), par("usr")[4]*0.8, labels = "FDR < 0.01 \n 31 mRNAs", pos = 2, col = "blue")
 
 tra_var_select <- filter(as.data.frame(tra_variable), tra_variable[,4]<0.05)
 

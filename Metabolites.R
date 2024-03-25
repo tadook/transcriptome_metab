@@ -105,6 +105,20 @@ for (i in 1:285){
   variable <- rbind(variable,sum_met)
 }
 
+# p-value distribution
+met_pvalue <-　log10(variable[,4])
+met_fdr <- p.adjust(variable[,4], method = "fdr")
+met_fdr_threshold <- max(variable[,4][met_fdr <= 0.01])
+breaks <- seq(-10, 0, length.out = 100)
+num_p_less_than_0_05 <- sum(met_pvalue < log10(0.05))
+num_fdr_less_than_0_01 <- sum(met_fdr < 0.01)
+
+hist(met_pvalue, breaks = breaks, xlab = "Log10(p-value)", ylab = "Frequency", main = "Histogram on log10(p-value) for metabolites")
+abline(v = log10(0.05), col = "red", lty = "solid")
+abline(v = log10(met_fdr_threshold), col = "blue", lty = "dotted")
+text(log10(0.05), par("usr")[4]*0.9, labels = "p < 0.05 \n 128 metabolites", pos = 2, col = "red")
+text(log10(met_fdr_threshold), par("usr")[4]*0.75, labels = "FDR < 0.01 \n 31 metabolites", pos = 2, col = "blue")
+
 var_select <- filter(as.data.frame(variable), variable[,4]<0.05)
 
 # Normalization for Deepinsight--------------------------------------------
@@ -179,7 +193,7 @@ fwrite(metab_trans,"../trans_metab.csv")
 
 # Make interaction term ---------------------------------------------------
 
-for (i in 8:135){ # This loop takes about 15 minutes
+for (i in 8:135){ # This loop takes about several minutes with M2 mac 
   for (k in 136:723){
     add_column <- data.frame(metab_trans[,i] * metab_trans[,k])
     colnames(add_column) <- paste0(colnames(metab_trans)[i],"-",colnames(metab_trans)[k])
@@ -205,9 +219,83 @@ for (i in 9:75988){
 variable_mettra <- as.data.frame(variable_mettra)[717:75980,]
 fdr <- p.adjust(variable_mettra[,4], method ="BH")
 var_mettra_select <- cbind(as.data.frame(variable_mettra), as.data.frame(fdr))
-var_mettra_select <- filter(var_mettra_select, var_mettra_select[,5]<0.01)
 
+# p-value distribution
+mettra_pvalue <-　log10(var_mettra_select[,4])
+mettra_fdr <- p.adjust(var_mettra_select[,4], method = "fdr")
+mettra_fdr_threshold <- max(var_mettra_select[,4][mettra_fdr <= 0.01])
+breaks <- seq(-10, 0, length.out = 100)
+num_p_less_than_0_05 <- sum(mettra_pvalue < log10(0.05))
+num_fdr_less_than_0_01 <- sum(mettra_fdr < 0.01)
+
+hist(mettra_pvalue, breaks = breaks, xlab = "Log10(p-value)", ylab = "Frequency", main = "Histogram on log10(p-value) for interactions")
+abline(v = log10(0.05), col = "red", lty = "solid")
+abline(v = log10(mettra_fdr_threshold), col = "blue", lty = "dotted")
+text(log10(0.05), par("usr")[4]*0.9, labels = "p < 0.05 \n 30,714 interactions", pos = 2, col = "red")
+text(log10(met_fdr_threshold), par("usr")[4]*0.75, labels = "FDR < 0.01 \n 4,835 interactions", pos = 2, col = "blue")
+
+var_mettra_select <- filter(var_mettra_select, var_mettra_select[,5]<0.01)
 metab_trans <- metab_trans %>% dplyr::select(colnames(metab_trans[1:723]),rownames(var_mettra_select)) 
+
+### Selecting significant interaction terms with main effects [FOR REVIEW]
+
+metab_trans <- merge(metab_data, transcriptome_variables, by = "study_id")
+metab_trans <- metab_trans[,c(1,718:723,2:717)]
+
+for (i in 8:135){ # This loop takes about several minutes with M2 mac 
+  for (k in 136:723){
+    add_column <- data.frame(metab_trans[,i] * metab_trans[,k])
+    colnames(add_column) <- paste0(colnames(metab_trans)[i],"_",colnames(metab_trans)[k])
+    metab_trans <- cbind(metab_trans, add_column)
+  }
+} 
+
+metab_trans_sel <- merge(df_metadata[,c("study_id","raceethn")], metab_trans, by = "study_id")
+
+colnames(metab_trans_sel)[725]
+
+variable_mettra <- NULL
+for (i in 725:75988) { 
+  interaction_term <- colnames(metab_trans_sel)[i]
+  main_effects <- unlist(strsplit(interaction_term, "_"))
+  
+  interaction_term_quoted <- paste0("`", interaction_term, "`")
+  main_effects_quoted <- sapply(main_effects, function(x) paste0("`", x, "`"))
+  
+  formula <- as.formula(paste0("severity ~ ", interaction_term_quoted, 
+                               " + ", paste(main_effects_quoted, collapse = " + "),
+                               " + intake_sex + Age_mo + raceethn"))
+  
+  severe.fit <- glm(formula, 
+                    family = binomial(),
+                    data = metab_trans_sel)
+  sum <- summary(severe.fit)
+  sum_mettra <- sum$coefficients[2,] %>% as.data.frame() %>% t()
+  rownames(sum_mettra) <- interaction_term
+  variable_mettra <- rbind(variable_mettra, sum_mettra)
+}
+
+variable_mettra <- as.data.frame(variable_mettra)
+fdr <- p.adjust(variable_mettra[,4], method ="BH")
+var_mettra_select <- cbind(as.data.frame(variable_mettra), as.data.frame(fdr))
+
+# p-value distribution
+mettra_pvalue <-　log10(var_mettra_select[,4])
+mettra_fdr <- p.adjust(var_mettra_select[,4], method = "fdr")
+mettra_fdr_threshold <- 1e-6
+breaks <- seq(-10, 0, length.out = 100)
+num_p_less_than_0_05 <- sum(mettra_pvalue < log10(0.05))
+num_fdr_less_than_0_01 <- sum(mettra_fdr < 0.01)
+
+hist(mettra_pvalue, breaks = breaks, xlab = "Log10(p-value)", ylab = "Frequency", main = "Histogram on log10(p-value) for interactions")
+abline(v = log10(0.05), col = "red", lty = "solid")
+abline(v = log10(mettra_fdr_threshold), col = "blue", lty = "dotted")
+text(log10(0.05), par("usr")[4]*0.9, labels = "p < 0.05 \n 5,983 interactions", pos = 2, col = "red")
+text(log10(met_fdr_threshold), par("usr")[4]*0.75, labels = "FDR < 0.01 \n 0 interactions", pos = 2, col = "blue")
+
+var_mettra_select <- filter(var_mettra_select, var_mettra_select[,5]<0.01)
+metab_trans <- metab_trans %>% dplyr::select(colnames(metab_trans[1:723]),rownames(var_mettra_select)) 
+
 
 ## Normalization for interaction terms
 
