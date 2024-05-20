@@ -201,7 +201,7 @@ for (i in 8:135){ # This loop takes about several minutes with M2 mac
   }
 } 
 
-## Selecting significant interaction terms
+## Selecting significant interaction terms [main analysis]
 
 metab_trans_sel <- merge(df_metadata[,c("study_id","raceethn")], metab_trans, by = "study_id")
 
@@ -237,7 +237,7 @@ text(log10(met_fdr_threshold), par("usr")[4]*0.75, labels = "FDR < 0.01 \n 4,835
 var_mettra_select <- filter(var_mettra_select, var_mettra_select[,5]<0.01)
 metab_trans <- metab_trans %>% dplyr::select(colnames(metab_trans[1:723]),rownames(var_mettra_select)) 
 
-### Selecting significant interaction terms with main effects [FOR REVIEW]
+### Selecting significant interaction terms with main effects [sensitivity analysis]
 
 metab_trans <- merge(metab_data, transcriptome_variables, by = "study_id")
 metab_trans <- metab_trans[,c(1,718:723,2:717)]
@@ -254,8 +254,29 @@ metab_trans_sel <- merge(df_metadata[,c("study_id","raceethn")], metab_trans, by
 
 colnames(metab_trans_sel)[725]
 
+# Test to confirm the model(725)
 variable_mettra <- NULL
-for (i in 725:75988) { 
+interaction_term <- colnames(metab_trans_sel)[725]
+main_effects <- unlist(strsplit(interaction_term, "_"))
+
+interaction_term_quoted <- paste0("`", interaction_term, "`")
+main_effects_quoted <- sapply(main_effects, function(x) paste0("`", x, "`"))
+
+formula <- as.formula(paste0("severity ~ ", interaction_term_quoted, 
+                             " + ", paste(main_effects_quoted, collapse = " + "),
+                             " + intake_sex + Age_mo + raceethn"))
+
+severe.fit <- glm(formula, 
+                  family = binomial(),
+                  data = metab_trans_sel)
+sum <- summary(severe.fit)
+sum_mettra <- sum$coefficients[2,] %>% as.data.frame() %>% t()
+rownames(sum_mettra) <- interaction_term
+variable_mettra <- rbind(variable_mettra, sum_mettra)
+
+# regression with main effects
+variable_mettra <- NULL
+for (i in 725:75988) { 　　
   interaction_term <- colnames(metab_trans_sel)[i]
   main_effects <- unlist(strsplit(interaction_term, "_"))
   
@@ -293,14 +314,11 @@ abline(v = log10(mettra_fdr_threshold), col = "blue", lty = "dotted")
 text(log10(0.05), par("usr")[4]*0.9, labels = "p < 0.05 \n 5,983 interactions", pos = 2, col = "red")
 text(log10(met_fdr_threshold), par("usr")[4]*0.75, labels = "FDR < 0.01 \n 0 interactions", pos = 2, col = "blue")
 
-var_mettra_select <- filter(var_mettra_select, var_mettra_select[,5]<0.01)
+var_mettra_select <- filter(var_mettra_select, var_mettra_select[,4]<0.05) # FOR REVIEW
 metab_trans <- metab_trans %>% dplyr::select(colnames(metab_trans[1:723]),rownames(var_mettra_select)) 
 
-
-## Normalization for interaction terms
-
-## Check the distribution before normalization
-hist(metab_trans[,1000])
+## Normalization for interaction terms [main analysis]
+hist(as.vector(as.matrix(metab_trans[,724:5558])))
 
 ## Robust scaling for the Deepinsight analysis
 Robust_scale <- function(x) {
@@ -338,7 +356,7 @@ for (i in 724:5558){
 }
 
 ## Check the distribution after normalization
-hist(metab_trans[,1000])
+hist(as.vector(as.matrix(metab_trans[,724:5558])))
 
 # Check the missing value
 table(is.na(metab_trans))
@@ -346,6 +364,59 @@ table(is.na(metab_trans))
 ## Save the data 
 metab_trans_int <- metab_trans
 fwrite(metab_trans_int,"../trans_metab_int.csv")
+
+
+## Normalization for interaction terms [sensitivity analysis]
+
+## Check the distribution before normalization
+hist(as.vector(as.matrix(metab_trans[,724:6706])))
+
+## Robust scaling for the Deepinsight analysis
+Robust_scale <- function(x) {
+  interquartile = quantile(x)[4] - quantile(x)[2]
+  x[ quantile(x)[4] == 0 ] <- x  # for zero skewed variable
+  x[ quantile(x)[4] != 0 ] <- (x - median(x)) / interquartile
+  x
+}
+
+for (i in 724:6706){
+  metab_trans[,i] <- Robust_scale(metab_trans[,i])
+}
+
+## Convert the outliers
+Conv_outlier <- function(x) {
+  interquartile = quantile(x)[4] - quantile(x)[2]
+  quartile_min = quantile(x)[2] - 1.5 * interquartile
+  quartile_max = quantile(x)[4] + 1.5 * interquartile
+  x[ quantile(x)[4] != 0 & x < quartile_min ] <- quartile_min
+  x[ quantile(x)[4] != 0 & x > quartile_max ] <- quartile_max
+  x
+}
+
+for (i in 724:6706){
+  metab_trans[,i] <- Conv_outlier(metab_trans[,i])
+}
+
+## Min-max scale
+MinMax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+for (i in 724:6706){
+  metab_trans[,i] <- MinMax(metab_trans[,i])
+}
+
+
+## Check the distribution after normalization
+hist(as.vector(as.matrix(metab_trans[,724:6706])))
+
+# Check the missing value
+table(is.na(metab_trans))
+
+## Save the data 
+metab_trans_int <- metab_trans
+fwrite(metab_trans_int,"../trans_metab_int_rev0506.csv")
+
 
 
 # Check the precision of RF -----------------------------------------------
@@ -426,7 +497,7 @@ auc_score
 
 
 
-# Sensitivity analyses ---------------------------------------------
+# RSV/RV analyses ---------------------------------------------
 
 metab_trans <-  fread("../trans_metab_int.csv")
 feature_severe <- read.table("../feature_severe.csv", header = FALSE, sep = ",")

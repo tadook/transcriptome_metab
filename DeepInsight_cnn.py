@@ -18,11 +18,11 @@ from pandas import DataFrame
 
 # import dataset
 import pandas as pd
-tra_met_data = pd.read_csv('../trans_metab_int.csv') # normalized_counts
+tra_met_data = pd.read_csv('../trans_metab_int_rev0506.csv') 
 X = tra_met_data.drop(columns=['study_id','CPAPintubate','inpatient_hfo','severity','IntensiveTreatment','intake_sex','Age_mo'])
 y = tra_met_data['severity']
-genes = tra_met_data.iloc[:, 7:5558].columns.to_numpy()
-print(X.shape, y.shape)
+genes = tra_met_data.iloc[:, 7:5558].columns.to_numpy() # 7:6706 for sensitivity analysis
+print(X.shape, y.shape) 
 
 # make train/test data
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
@@ -91,7 +91,7 @@ X_test_img = it.transform(X_test_norm)
 
 X_train_img.shape, X_test_img.shape
 
-pd.to_pickle(it,'models/image/it_0412.pkl')
+pd.to_pickle(it,'models/image/it_0506.pkl')
 
 
 # Convert images to ones with colors
@@ -102,7 +102,7 @@ coords = it.coords()
 X_img = X_train_img
 new_img = np.zeros_like(X_img)
 
-for k in range(0, 5550): # All variables
+for k in range(0, 5550): # All variables (6698 for sensitivity analysis)
     x = coords[k][0]
     y = coords[k][1]
 
@@ -121,7 +121,7 @@ X_train_img = new_img
 X_img = X_test_img
 new_img = np.zeros_like(X_img)
 
-for k in range(0, 5550):
+for k in range(0, 5550): # All variables (6698 for sensitivity analysis)
     x = coords[k][0]
     y = coords[k][1]
 
@@ -140,7 +140,7 @@ X_test_img = new_img
 new_img = np.zeros_like(X_img)
 new_img2 = np.ones_like(X_img)
 
-for k in range(0, 5550): 
+for k in range(0, 5550): # All variables (6698 for sensitivity analysis)
     x = coords[k][0]
     y = coords[k][1]
 
@@ -157,10 +157,10 @@ X_cont_img = new_img
 
 # save X_train/test_img and y_train/test for Google Colab
 import numpy
-numpy.save('outputs/tramet_tsne_0412/X_train_img.npy', X_train_img)
-numpy.save('outputs/tramet_tsne_0412/X_test_img.npy', X_test_img)
-y_train.to_pickle('outputs/tramet_tsne_0412/y_train.pkl')
-y_test.to_pickle('outputs/tramet_tsne_0412/y_test.pkl')
+numpy.save('outputs/tramet_tsne_0506/X_train_img.npy', X_train_img)
+numpy.save('outputs/tramet_tsne_0506/X_test_img.npy', X_test_img)
+y_train.to_pickle('outputs/tramet_tsne_0506/y_train.pkl')
+y_test.to_pickle('outputs/tramet_tsne_0506/y_test.pkl')
 
 # View overall feature overlap
 import matplotlib.pyplot as plt
@@ -248,7 +248,7 @@ plt.show()
 import os
 from PIL import Image
 
-output_img_dir = "outputs/imgs_tramet_0419_82"
+output_img_dir = "outputs/imgs_tramet_0506_82"
 
 for split, X, y in zip(['train', 'test'], [X_train_img, X_test_img], [y_train, y_test]):
   for c in range(num_classes):
