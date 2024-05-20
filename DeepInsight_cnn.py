@@ -1,5 +1,5 @@
 # Command Prompt
-# cd /Users/tao/Library/CloudStorage/Dropbox/Tao/1_HasegawaLab/papers/transcriptome_metabolome/work/Github
+# cd YOUR PATH
 !git clone https://github.com/alok-ai-lab/pyDeepInsight.git
 !pip install -r ../pyDeepInsight/requirements.txt
 !pip install seaborn
